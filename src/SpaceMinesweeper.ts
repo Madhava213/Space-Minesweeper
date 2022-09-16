@@ -5,6 +5,7 @@
  */ 
 
 import * as gfx from 'gophergfx'
+import { Heart } from './Heart';
 import { Mine } from './Mine';
 
 export class SpaceMinesweeper extends gfx.GfxApp
@@ -14,6 +15,8 @@ export class SpaceMinesweeper extends gfx.GfxApp
     private star: gfx.Rectangle;
     private laser: gfx.Rectangle;
     private mine: gfx.Rectangle;
+    private heart: gfx.Rectangle;
+    private gameOver: gfx.Rectangle;
 
     // These transforms are "groups" that are used to hold instances
     // of the same base object when they need to be placed in the scene
@@ -22,6 +25,7 @@ export class SpaceMinesweeper extends gfx.GfxApp
     private stars: gfx.Transform2;
     private lasers: gfx.Transform2;
     private mines: gfx.Transform2;
+    private hearts: gfx.Transform2;
 
     // Member variable to store the current position of the mouse in
     // normalized device coordinates.
@@ -29,6 +33,9 @@ export class SpaceMinesweeper extends gfx.GfxApp
 
     // Member variable to record the last time a mine was spawned
     private timeSinceLastMineSpawn = 0;
+
+    // Pause State
+    private pauseState: boolean;
 
     constructor()
     {
@@ -41,11 +48,15 @@ export class SpaceMinesweeper extends gfx.GfxApp
         this.star = new gfx.Rectangle();
         this.laser = new gfx.Rectangle();
         this.mine = new gfx.Rectangle();
+        this.heart = new gfx.Rectangle();
+        this.gameOver = new gfx.Rectangle();
         this.stars = new gfx.Transform2();
         this.lasers = new gfx.Transform2();
         this.mines = new gfx.Transform2();
+        this.hearts = new gfx.Transform2();
         this.mousePosition = new gfx.Vector2();
         this.timeSinceLastMineSpawn = 0;
+        this.pauseState = false;
 
         // This parameter zooms in on the scene to fit within the window.
         // Other options include FIT or STRETCH.
@@ -69,6 +80,24 @@ export class SpaceMinesweeper extends gfx.GfxApp
             starInstance.position.set(Math.random()*2-1, Math.random()*2-1);
             this.stars.add(starInstance);
         }
+        
+        // Initiaize Hearts
+        this.heart.material.texture = new gfx.Texture('./heart.png');
+        const numHearts = 3;
+        let heartPosX = 0.8;
+        for(let i=0; i < numHearts; i++)
+        {
+            const heartInstance = new Heart(this.heart);
+            const heartSize = 0.05;
+            heartInstance.scale.set(heartSize, heartSize);
+            heartInstance.position.set(heartPosX, 0.4);
+            this.hearts.add(heartInstance);
+            heartPosX += 0.055;
+        }
+
+        // Initialize Game Over Sprite
+        this.gameOver.material.texture = new gfx.Texture('./game_over.png');
+        this.gameOver.scale.set(0.12, 0.12);
 
         // Set the laser to be a bright green color and scale the rectangle
         // so that it is in the shape of long, thin beam.
@@ -94,6 +123,9 @@ export class SpaceMinesweeper extends gfx.GfxApp
         // to an appropriate size.
         this.ship.material.texture = new gfx.Texture('./ship.png');
         this.ship.scale.set(0.08, 0.08);
+        this.ship.boundingCircle.radius *= .75;
+        this.ship.boundingBox.min.multiplyScalar(0.5);
+        this.ship.boundingBox.max.multiplyScalar(0.5);
 
         // Add all the objects to the scene. Note that the order is important!
         // Objects that are added later will be rendered on top of objects
@@ -102,11 +134,21 @@ export class SpaceMinesweeper extends gfx.GfxApp
         this.scene.add(this.stars);
         this.scene.add(this.lasers);
         this.scene.add(this.mines);
+        this.scene.add(this.hearts);
         this.scene.add(this.ship);
     }
 
     update(deltaTime: number): void 
     {
+        if (this.hearts.children.length <= 0) {
+            this.ship.remove();
+            this.stars.remove();
+            this.lasers.remove();
+            this.mines.remove();
+            this.scene.add(this.gameOver);
+            this.pause();
+            this.pauseState = true;
+        }
         // These parameters define the motions of objects in the scene,
         // which you will use to complete the code for this assignment.
         // You can feel free to modify them if you want your game
@@ -133,10 +175,10 @@ export class SpaceMinesweeper extends gfx.GfxApp
         // This creates the illusion that the ship is moving forward, even
         // though it remains in the center of the screen.
         this.stars.children.forEach((star: gfx.Transform2) => {
-
             
             // ADD YOUR CODE HERE
-
+            star.position.x += (-moveDirection.x * shipSpeed);
+            star.position.y += (-moveDirection.y * shipSpeed);
 
             // This code resets the position of the star if it has moved outside
             // the boundaries of the scene, which are between (-1, -1) and (1, 1).
@@ -161,11 +203,13 @@ export class SpaceMinesweeper extends gfx.GfxApp
 
             
             // ADD YOUR CODE HERE
+            mine.rotation += mineRotationSpeed;
+            mine.position.x += (-moveDirection.x * shipSpeed);
+            mine.position.y += (-moveDirection.y * shipSpeed);
 
-           
             // This code makes the mines "home" in on the ship position
             const mineToShip = gfx.Vector2.subtract(mine.position, this.ship.position);
-            mineToShip.normalize();
+            mineToShip.normalize(); 
             mineToShip.multiplyScalar(mineSpeed)
             mine.position.subtract(mineToShip);
 
@@ -177,16 +221,23 @@ export class SpaceMinesweeper extends gfx.GfxApp
         });
 
 
+        this.hearts.children.forEach((heart: gfx.Transform2) => {
+            (heart as Heart).update(deltaTime);
+        });
+
         // PART 4: LASER MOVEMENT
         // For each laser in the scene, translate it forward in its current direction.
         // If the laser moves outside the boundary of the scene, then delete it
         // from the scene by calling its remove() method.
         this.lasers.children.forEach((laser: gfx.Transform2) => {
-
-
             // ADD YOUR CODE HERE
 
-            
+            const laserDestinationDistance = 1.25;
+            laser.translateY((laser.position.y + laserDestinationDistance) * laserSpeed);
+
+            if (laser.position.y > 1.2) {
+                laser.remove();
+            }
         });  
 
         // Check for mine-to-mine collisions
@@ -213,9 +264,10 @@ export class SpaceMinesweeper extends gfx.GfxApp
     // and then add it to the this.lasers group.
     onMouseDown(event: MouseEvent): void 
     {
-
         // ADD YOUR CODE HERE
-
+        const laserInstance = new gfx.ShapeInstance(this.laser);
+        laserInstance.lookAt(this.mousePosition);
+        this.lasers.add(laserInstance);
     }
 
     // When the mouse moves, store the current position of the mouse.
@@ -266,18 +318,25 @@ export class SpaceMinesweeper extends gfx.GfxApp
     {
         for(let i=0; i < this.mines.children.length; i++)
         {
+            const mine1 = this.mines.children[i] as Mine;
             for(let j=i+1; j < this.mines.children.length; j++)
             {
                 // The mines group can contain any object that extend from the base
                 // class (Transform2).  This code will explicitly cast each one
                 // as a Mine object, which in this case is a safe thing to do.
-                const mine1 = this.mines.children[i] as Mine;
                 const mine2 = this.mines.children[j] as Mine;
 
 
                 // ADD YOUR CODE HERE
-
-
+                if (mine1.intersects(mine2)) {
+                    mine1.explode();
+                    mine2.explode();
+                }
+            }
+            if (mine1.intersects(this.ship) && !mine1.isExploding()) {
+                const heart = this.hearts.children[0] as Heart;
+                mine1.explode();
+                heart.break();
             }
         }
     }
@@ -302,7 +361,10 @@ export class SpaceMinesweeper extends gfx.GfxApp
 
 
                 // ADD YOUR CODE HERE
-
+                if (mine.intersects(laser)) {
+                    mine.explode();
+                    laser.remove();
+                }
 
             });
         });
