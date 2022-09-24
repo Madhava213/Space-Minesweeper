@@ -177,8 +177,8 @@ export class SpaceMinesweeper extends gfx.GfxApp
         this.stars.children.forEach((star: gfx.Transform2) => {
             
             // ADD YOUR CODE HERE
-            star.position.x += (-moveDirection.x * shipSpeed);
-            star.position.y += (-moveDirection.y * shipSpeed);
+            star.position.x += (-moveDirection.x * (shipSpeed + star.scale.x));
+            star.position.y += (-moveDirection.y * (shipSpeed + star.scale.x));
 
             // This code resets the position of the star if it has moved outside
             // the boundaries of the scene, which are between (-1, -1) and (1, 1).
